@@ -36,8 +36,8 @@ const INITIAL_METRICS: Metrics = {
 };
 
 export function useTasks(): UseTasksState {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>(() => generateSalesTasks(50));
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastDeleted, setLastDeleted] = useState<Task | null>(null);
   const fetchedRef = useRef(false);
@@ -61,9 +61,10 @@ export function useTasks(): UseTasksState {
     });
   }
 
-  // Initial load: public JSON -> fallback generated dummy
+  // Load tasks from public JSON
   useEffect(() => {
     if (fetchedRef.current) return;
+    fetchedRef.current = true;
     let isMounted = true;
     async function load() {
       try {
@@ -71,23 +72,12 @@ export function useTasks(): UseTasksState {
         if (!res.ok) throw new Error(`Failed to load tasks.json (${res.status})`);
         const data = (await res.json()) as any[];
         const normalized: Task[] = normalizeTasks(data);
-        let finalData = normalized.length > 0 ? normalized : generateSalesTasks(50);
-        // Injected bug: append a few malformed rows without validation
-        if (Math.random() < 0.5) {
-          finalData = [
-            ...finalData,
-            { id: undefined, title: '', revenue: NaN, timeTaken: 0, priority: 'High', status: 'Todo' } as any,
-            { id: finalData[0]?.id ?? 'dup-1', title: 'Duplicate ID', revenue: 9999999999, timeTaken: -5, priority: 'Low', status: 'Done' } as any,
-          ];
+        if (normalized.length > 0 && isMounted) {
+          setTasks(normalized);
         }
-        if (isMounted) setTasks(finalData);
       } catch (e: any) {
-        if (isMounted) setError(e?.message ?? 'Failed to load tasks');
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          fetchedRef.current = true;
-        }
+        console.error('Failed to load tasks.json:', e);
+        // Keep the fallback data already loaded via useState initializer
       }
     }
     load();
